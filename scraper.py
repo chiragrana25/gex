@@ -83,19 +83,11 @@ def scrape_ticker_to_sheet(page, ticker, workbook):
 
 def run_once():
     with sync_playwright() as p:
-        # 1. Launch the browser
         browser = p.chromium.launch(headless=True)
-        
-        # 2. Define the User Agent to look human
         user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        
-        # 3. Create the context (This is where the user_agent goes)
         context = browser.new_context(user_agent=user_agent)
-        
-        # 4. Create the page from that context
         page = context.new_page()
 
-        # Try to load existing workbook to keep history, or create new
         try:
             wb = load_workbook(FILENAME)
         except:
@@ -103,18 +95,37 @@ def run_once():
             if "Sheet" in wb.sheetnames:
                 wb.remove(wb["Sheet"])
 
-        # Loop through your tickers and scrape
+        # Create a list to hold data for the CSV
+        all_data_frames = []
+
         for ticker in TICKERS:
             scrape_ticker_to_sheet(page, ticker, wb)
+            
+            # --- NEW CSV LOGIC START ---
+            try:
+                import pandas as pd
+                ws = wb[ticker]
+                # Convert the excel sheet values into a Pandas DataFrame
+                data = list(ws.values)
+                if len(data) > 0:
+                    temp_df = pd.DataFrame(data)
+                    # Add a column so you know which ticker this row belongs to
+                    temp_df.insert(0, 'Ticker_ID', ticker)
+                    all_data_frames.append(temp_df)
+            except Exception as e:
+                print(f"Could not prepare CSV data for {ticker}: {e}")
+            # --- NEW CSV LOGIC END ---
 
-        # Finalize and Save
+        # Finalize and Save Excel
         update_summary_sheet(wb)
         wb.save(FILENAME)
-        df.to_csv("latest_data.csv", index=False)
         
-        # Clean up
+        # --- SAVE THE MASTER CSV ---
+        if all_data_frames:
+            import pandas as pd
+            final_df = pd.concat(all_data_frames, ignore_index=True)
+            final_df.to_csv("latest_data.csv", index=False)
+            print("Master CSV saved successfully.")
+
         context.close()
         browser.close()
-
-if __name__ == "__main__":
-    run_once()
