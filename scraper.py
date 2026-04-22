@@ -62,7 +62,7 @@ def scrape_ticker(page, ticker):
         payload = {
             "ticker": ticker,
             "values": values_table,
-            "colors": colors_table
+            "colors": colors_table,
             "updated": timestamp
         }
 
