@@ -6,7 +6,7 @@ from playwright.sync_api import sync_playwright
 
 # --- CONFIGURATION ---
 # Paste your Google Apps Script Web App URL (the one ending in /exec)
-SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbzDwiNbc40nVER-q9FW9uy0SE7motbJt0jb46c7JCJCNcmKrjWXUqy6SGRD8mjF8oRM7g/exec"
+SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbyVhnNyUmCmqyQ18A_qxs9Lj70iHp48uCWH_5AMcizW7WLw7ttyiTGR7c5tTCj_YpmOgQ/exec"
 
 TICKERS = ["SPY", "QQQ", "MU","NVDA", "SNDK", "AAOI", "ALAB", "TSLA", "MSFT", "CRWV", "RDDT", "AMD", "PANW", "ASTS", "UNH"]
 
