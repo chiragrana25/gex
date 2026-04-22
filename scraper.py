@@ -83,23 +83,37 @@ def scrape_ticker_to_sheet(page, ticker, workbook):
 
 def run_once():
     with sync_playwright() as p:
+        # 1. Launch the browser
         browser = p.chromium.launch(headless=True)
-        #page = browser.new_page()
-        user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
-        page = context.new_page(user_agent=user_agent)
+        
+        # 2. Define the User Agent to look human
+        user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        
+        # 3. Create the context (This is where the user_agent goes)
+        context = browser.new_context(user_agent=user_agent)
+        
+        # 4. Create the page from that context
+        page = context.new_page()
 
         # Try to load existing workbook to keep history, or create new
         try:
-            from openpyxl import load_workbook
             wb = load_workbook(FILENAME)
         except:
             wb = Workbook()
+            if "Sheet" in wb.sheetnames:
+                wb.remove(wb["Sheet"])
 
-        # ... (Your existing scrape logic for the tickers) ...
+        # Loop through your tickers and scrape
+        for ticker in TICKERS:
+            scrape_ticker_to_sheet(page, ticker, wb)
 
+        # Finalize and Save
         update_summary_sheet(wb)
         wb.save(FILENAME)
+        
+        # Clean up
+        context.close()
         browser.close()
 
 if __name__ == "__main__":
-    run_once() # Just run it once; GitHub will trigger it again in 15 mins
+    run_once()
