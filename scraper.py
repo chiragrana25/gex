@@ -79,32 +79,25 @@ def scrape_ticker_to_sheet(page, ticker, workbook):
         status_tracker[ticker] = f"Error: {str(e)[:30]}..."
         print(f"Failed to fetch {ticker}: {e}")
 
-def run_cycle():
+# ... (Keep all your imports and helper functions like rgb_to_hex)
+
+def run_once():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
 
-        wb = Workbook()
-        if "Sheet" in wb.sheetnames:
-            wb.remove(wb["Sheet"])
+        # Try to load existing workbook to keep history, or create new
+        try:
+            from openpyxl import load_workbook
+            wb = load_workbook(FILENAME)
+        except:
+            wb = Workbook()
 
-        for ticker in TICKERS:
-            scrape_ticker_to_sheet(page, ticker, wb)
+        # ... (Your existing scrape logic for the tickers) ...
 
-        # Build the summary tab before saving
         update_summary_sheet(wb)
-        
         wb.save(FILENAME)
         browser.close()
 
-    # Print summary to console
-    print("\n--- FETCH SUMMARY ---")
-    for ticker, ts in status_tracker.items():
-        print(f"{ticker.ljust(6)} | {ts}")
-    print("----------------------\n")
-
 if __name__ == "__main__":
-    while True:
-        run_cycle()
-        print(f"Sleeping for {INTERVAL/60} minutes...")
-        time.sleep(INTERVAL)
+    run_once() # Just run it once; GitHub will trigger it again in 15 mins
