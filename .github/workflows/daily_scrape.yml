@@ -1,19 +1,15 @@
-name: Financial Heatmap Scraper
+name: GEX to Google Sheets
 
 on:
   schedule:
-    # This runs every 15 minutes
     - cron: '*/15 * * * *'
-  workflow_dispatch: # Allows you to run it manually for testing
+  workflow_dispatch:
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write  # Allows GitHub to save the Excel file back to your repo
-
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -23,21 +19,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          pip install playwright requests
           playwright install chromium
 
       - name: Run Scraper
         run: python scraper.py
-
-      - name: Commit and Push
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          git pull --rebase origin main
-          
-          # IMPORTANT: Notice both files are listed here
-          git add Market_GEX_Heatmaps.xlsx latest_data.csv
-          
-          git commit -m "Update Data: $(date)" || exit 0
-          git push origin main
