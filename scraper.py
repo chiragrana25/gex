@@ -110,6 +110,7 @@ def run_once():
         # Finalize and Save
         update_summary_sheet(wb)
         wb.save(FILENAME)
+        df.to_csv("latest_data.csv", index=False)
         
         # Clean up
         context.close()
