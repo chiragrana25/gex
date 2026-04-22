@@ -5,13 +5,15 @@ from datetime import datetime
 from playwright.sync_api import sync_playwright
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment
+import requests
+import json
 
 # --- CONFIGURATION ---
 TICKERS = ["SPY", "QQQ", "MU","NVDA", "SNDK", "AAOI", "ALAB", "TSLA"]
 BASE_URL = "https://mztrading.netlify.app/options/analyze/{}?dgextab=GEX&dte=30&showHeatmap=true"
 INTERVAL = 900 
 FILENAME = "Market_GEX_Heatmaps.xlsx"
-
+SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbzu-zhE2_ZKd1hi_YRj4c023BJMpjYOZO_5u54pFPWTZjg_ByssvIxnJ95cmebg1dQl/exec"
 # Dictionary to track timestamps in memory for the console output
 status_tracker = {ticker: "Not yet fetched" for ticker in TICKERS}
 
@@ -45,39 +47,38 @@ def update_summary_sheet(wb):
     ws.column_dimensions['A'].width = 15
     ws.column_dimensions['B'].width = 25
 
-def scrape_ticker_to_sheet(page, ticker, workbook):
-    url = BASE_URL.format(ticker)
+def scrape_ticker(page, ticker):
+    url = f"https://mztrading.netlify.app/options/analyze/{ticker}?dgextab=GEX&dte=30&showHeatmap=true"
     try:
         page.goto(url, wait_until="networkidle", timeout=60000)
-        page.wait_for_selector("table", timeout=20000)
-        time.sleep(3) 
-
-        if ticker in workbook.sheetnames:
-            workbook.remove(workbook[ticker])
-        ws = workbook.create_sheet(ticker)
-
+        page.wait_for_selector("td", timeout=30000)
+        
         rows = page.query_selector_all("tr")
-        for r_idx, row in enumerate(rows, start=1):
+        values_table = []
+        colors_table = []
+
+        for row in rows:
             cells = row.query_selector_all("td, th")
-            for c_idx, cell in enumerate(cells, start=1):
-                text = cell.inner_text().strip()
-                bg_color = cell.evaluate("el => window.getComputedStyle(el).backgroundColor")
-                excel_cell = ws.cell(row=r_idx, column=c_idx, value=text)
-                hex_color = rgb_to_hex(bg_color)
-                if hex_color not in ["000000", "FFFFFF"]:
-                    excel_cell.fill = PatternFill(start_color=hex_color, end_color=hex_color, fill_type="solid")
-        
-        # Update our tracker with current time
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        status_tracker[ticker] = now_str
-        
-        # Add timestamp to the specific ticker sheet as well
-        ws.cell(row=len(rows) + 2, column=1, value=f"Updated: {now_str}")
-        print(f"Successfully fetched {ticker} at {now_str}")
+            v_row = []
+            c_row = []
+            for cell in cells:
+                v_row.append(cell.inner_text().strip())
+                bg = cell.evaluate("el => window.getComputedStyle(el).backgroundColor")
+                c_row.append(rgb_to_hex(bg)) # Use your existing rgb_to_hex function
+            values_table.append(v_row)
+            colors_table.append(c_row)
+
+        # Send data to Google Sheets
+        payload = {
+            "ticker": ticker,
+            "values": values_table,
+            "colors": colors_table
+        }
+        response = requests.post(SHEETS_BRIDGE_URL, json=payload)
+        print(f"Sent {ticker} to Sheets: {response.text}")
 
     except Exception as e:
-        status_tracker[ticker] = f"Error: {str(e)[:30]}..."
-        print(f"Failed to fetch {ticker}: {e}")
+        print(f"Error {ticker}: {e}")
 
 # ... (Keep all your imports and helper functions like rgb_to_hex)
 
