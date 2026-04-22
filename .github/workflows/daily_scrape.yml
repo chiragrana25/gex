@@ -29,15 +29,15 @@ jobs:
       - name: Run Scraper
         run: python scraper.py
 
-      - name: Commit and Push Excel file
+      - name: Commit and Push
         run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Pull latest changes to avoid "fetch first" error
           git pull --rebase origin main
           
-          git add Market_GEX_Heatmaps.xlsx
-          # The '|| exit 0' prevents the script from failing if no data changed
-          git commit -m "Update Heatmap Data: $(date)" || exit 0
+          # IMPORTANT: Notice both files are listed here
+          git add Market_GEX_Heatmaps.xlsx latest_data.csv
+          
+          git commit -m "Update Data: $(date)" || exit 0
           git push origin main
