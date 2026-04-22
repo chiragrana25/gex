@@ -13,7 +13,7 @@ TICKERS = ["SPY", "QQQ", "MU","NVDA", "SNDK", "AAOI", "ALAB", "TSLA"]
 BASE_URL = "https://mztrading.netlify.app/options/analyze/{}?dgextab=GEX&dte=30&showHeatmap=true"
 INTERVAL = 900 
 FILENAME = "Market_GEX_Heatmaps.xlsx"
-SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbzu-zhE2_ZKd1hi_YRj4c023BJMpjYOZO_5u54pFPWTZjg_ByssvIxnJ95cmebg1dQl/exec"
+SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbwU-VRECHQSJG36v-RfXjIHxEIFfvqfTPJ_5xcXM_Y1inPz4dnXHhVivuyxLo4WnEzTpA/exec"
 # Dictionary to track timestamps in memory for the console output
 status_tracker = {ticker: "Not yet fetched" for ticker in TICKERS}
 
