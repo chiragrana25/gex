@@ -1,11 +1,12 @@
 import time
+import datetime
 import re
 import requests
 from playwright.sync_api import sync_playwright
 
 # --- CONFIGURATION ---
 # Paste your Google Apps Script Web App URL (the one ending in /exec)
-SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbwlxD44MpFvrPjJM-y6u-09Bq3lcExj1Lb_qnnQzj7cf1X4RUWwTHBaVVviVZ_1UK2LAA/exec"
+SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbzDwiNbc40nVER-q9FW9uy0SE7motbJt0jb46c7JCJCNcmKrjWXUqy6SGRD8mjF8oRM7g/exec"
 
 TICKERS = ["SPY", "QQQ", "MU","NVDA", "SNDK", "AAOI", "ALAB", "TSLA"]
 
@@ -51,12 +52,18 @@ def scrape_ticker(page, ticker):
             if v_row:
                 values_table.append(v_row)
                 colors_table.append(c_row)
-
+                
+        # Get the current time in EST
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        now_est = now_utc - datetime.timedelta(hours=4) # Currently EDT
+        timestamp = now_est.strftime("%Y-%m-%d %I:%M:%S %p EST")
+        
         # Prepare the data packet for Google Sheets
         payload = {
             "ticker": ticker,
             "values": values_table,
             "colors": colors_table
+            "updated": timestamp
         }
 
         # Send to Google Apps Script
