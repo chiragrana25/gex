@@ -8,7 +8,7 @@ from playwright.sync_api import sync_playwright
 # Paste your Google Apps Script Web App URL (the one ending in /exec)
 SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbzDwiNbc40nVER-q9FW9uy0SE7motbJt0jb46c7JCJCNcmKrjWXUqy6SGRD8mjF8oRM7g/exec"
 
-TICKERS = ["SPY", "QQQ", "MU","NVDA", "SNDK", "AAOI", "ALAB", "TSLA"]
+TICKERS = ["SPY", "QQQ", "MU","NVDA", "SNDK", "AAOI", "ALAB", "TSLA", "MSFT", "CRWV", "RDDT", "AMD", "PANW", "ASTS", "UNH"]
 
 def rgb_to_hex(rgb_str):
     """Converts 'rgb(255, 0, 0)' to hex '#FF0000' for Google Sheets"""
