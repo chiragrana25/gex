@@ -21,29 +21,42 @@ def get_live_price(ticker):
         return "N/A"
 
 def generate_recommendation(values_table):
-    """Simple logic to analyze GEX table and suggest a play."""
+    """Robust logic to analyze GEX table and suggest a play."""
     try:
         gex_values = []
         strikes = []
+        
+        # We start at index 1 to skip the header row
         for row in values_table[1:]:
             try:
-                strike = float(row[0].replace('$', '').replace(',', '').strip())
-                gex = float(row[1].replace(',', '').strip())
+                # Clean the strike: remove '$', ',', and spaces
+                raw_strike = row[0].replace('$', '').replace(',', '').strip()
+                # Clean the GEX: remove ',', and spaces
+                raw_gex = row[1].replace(',', '').strip()
+                
+                strike = float(raw_strike)
+                gex = float(raw_gex)
+                
                 strikes.append(strike)
                 gex_values.append(gex)
-            except: continue
+            except (ValueError, IndexError):
+                continue
         
-        if not gex_values: return "Neutral: Insufficient GEX data."
+        if len(gex_values) < 5: 
+            return "Neutral: Insufficient data points found in table."
         
-        max_idx = gex_values.index(max(gex_values))
-        min_idx = gex_values.index(min(gex_values))
+        max_val = max(gex_values)
+        min_val = min(gex_values)
+        max_idx = gex_values.index(max_val)
+        min_idx = gex_values.index(min_val)
         
-        if max(gex_values) > abs(min(gex_values)):
-            return f"BULLISH: Large GEX wall at {strikes[max_idx]}. Price may be drawn to this level."
+        # Simple Logic: Is the biggest wall positive or negative?
+        if max_val > abs(min_val):
+            return f"BULLISH: Significant Call Wall at {strikes[max_idx]}. Price often drifts toward these liquidity zones."
         else:
-            return f"BEARISH: Heavy Negative GEX at {strikes[min_idx]}. Watch for volatility expansion."
-    except:
-        return "Neutral: Awaiting data for analysis."
+            return f"BEARISH: Large Put Wall at {strikes[min_idx]}. Volatility often spikes if price drops below this level."
+    except Exception as e:
+        return f"Neutral: Analysis error ({str(e)})"
 
 def rgb_to_hex(rgb_str):
     try:
@@ -62,8 +75,9 @@ def scrape_ticker(page, ticker):
     
     try:
         page.goto(url, wait_until="networkidle", timeout=60000)
-        page.wait_for_selector("table", timeout=30000)
-        time.sleep(3)
+        #page.wait_for_selector("table", timeout=30000)
+        page.wait_for_selector("table tr td", timeout=30000)
+        time.sleep(7)
 
         rows = page.query_selector_all("tr")
         values_table, colors_table = [], []
