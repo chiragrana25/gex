@@ -4,7 +4,7 @@ import re
 import requests
 from playwright.sync_api import sync_playwright
 
-# --- CONFIGURATION ---
+# --- CONFIGURATION ---#
 # Paste your Google Apps Script Web App URL (the one ending in /exec)
 SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbyNk7VGZKxAiPli-L8mrDHaEq1fJbjhbpNJgJmxxXDT-6CuuRN7WdU-HJv8dpo9Wf4nLQ/exec"
 
