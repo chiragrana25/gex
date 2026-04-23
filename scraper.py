@@ -22,39 +22,35 @@ def get_live_price(ticker):
 
 def generate_recommendation(values_table):
     try:
-        gex_values = []
-        strikes = []
+        strikes, call_gex, put_gex = [], [], []
         
-        for row in values_table:
-            # We need at least 2 columns: Strike and GEX
-            if len(row) < 2:
-                continue
-                
+        # We assume: Col 0 = Strike, Col 1 = Call GEX, Col 2 = Put GEX
+        for row in values_table[1:]:
             try:
-                # Clean the text: remove $, commas, and non-numeric junk
-                clean_strike = re.sub(r'[^\d.]', '', row[0])
-                clean_gex = re.sub(r'[^\d.-]', '', row[1]) # Keep negative sign for GEX
+                s = float(re.sub(r'[^\d.]', '', row[0]))
+                c = float(re.sub(r'[^\d.-]', '', row[1]))
+                p = float(re.sub(r'[^\d.-]', '', row[2]))
                 
-                if clean_strike and clean_gex:
-                    strikes.append(float(clean_strike))
-                    gex_values.append(float(clean_gex))
-            except ValueError:
-                continue # Skip header rows or text-only rows
+                strikes.append(s)
+                call_gex.append(c)
+                put_gex.append(p)
+            except: continue
 
-        if len(gex_values) < 3:
-            return "Neutral: Waiting for GEX data to populate..."
+        if not strikes: return "Insufficient data."
 
-        max_gex = max(gex_values)
-        min_gex = min(gex_values)
+        # Analysis for each column
+        max_call_val = max(call_gex)
+        call_wall = strikes[call_gex.index(max_call_val)]
         
-        # Recommendation Logic
-        if max_gex > abs(min_gex):
-            wall_strike = strikes[gex_values.index(max_gex)]
-            return f"BULLISH: Dominant Call Wall at ${wall_strike}. Price tends to be pinned or attracted to this level."
-        else:
-            wall_strike = strikes[gex_values.index(min_gex)]
-            return f"BEARISH: Dominant Put Wall at ${wall_strike}. Breaking below this could accelerate selling."
-            
+        min_put_val = min(put_gex)
+        put_wall = strikes[put_gex.index(min_put_val)]
+
+        analysis = (
+            f"CALL WALL (Resistance): ${call_wall} | "
+            f"PUT WALL (Support): ${put_wall} | "
+            f"BIAS: {'Bullish' if abs(max_call_val) > abs(min_put_val) else 'Bearish'}"
+        )
+        return analysis
     except Exception as e:
         return f"Analysis Error: {str(e)}"
 
