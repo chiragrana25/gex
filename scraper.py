@@ -21,42 +21,42 @@ def get_live_price(ticker):
         return "N/A"
 
 def generate_recommendation(values_table):
-    """Robust logic to analyze GEX table and suggest a play."""
     try:
         gex_values = []
         strikes = []
         
-        # We start at index 1 to skip the header row
-        for row in values_table[1:]:
-            try:
-                # Clean the strike: remove '$', ',', and spaces
-                raw_strike = row[0].replace('$', '').replace(',', '').strip()
-                # Clean the GEX: remove ',', and spaces
-                raw_gex = row[1].replace(',', '').strip()
-                
-                strike = float(raw_strike)
-                gex = float(raw_gex)
-                
-                strikes.append(strike)
-                gex_values.append(gex)
-            except (ValueError, IndexError):
+        for row in values_table:
+            # We need at least 2 columns: Strike and GEX
+            if len(row) < 2:
                 continue
+                
+            try:
+                # Clean the text: remove $, commas, and non-numeric junk
+                clean_strike = re.sub(r'[^\d.]', '', row[0])
+                clean_gex = re.sub(r'[^\d.-]', '', row[1]) # Keep negative sign for GEX
+                
+                if clean_strike and clean_gex:
+                    strikes.append(float(clean_strike))
+                    gex_values.append(float(clean_gex))
+            except ValueError:
+                continue # Skip header rows or text-only rows
+
+        if len(gex_values) < 3:
+            return "Neutral: Waiting for GEX data to populate..."
+
+        max_gex = max(gex_values)
+        min_gex = min(gex_values)
         
-        if len(gex_values) < 5: 
-            return "Neutral: Insufficient data points found in table."
-        
-        max_val = max(gex_values)
-        min_val = min(gex_values)
-        max_idx = gex_values.index(max_val)
-        min_idx = gex_values.index(min_val)
-        
-        # Simple Logic: Is the biggest wall positive or negative?
-        if max_val > abs(min_val):
-            return f"BULLISH: Significant Call Wall at {strikes[max_idx]}. Price often drifts toward these liquidity zones."
+        # Recommendation Logic
+        if max_gex > abs(min_gex):
+            wall_strike = strikes[gex_values.index(max_gex)]
+            return f"BULLISH: Dominant Call Wall at ${wall_strike}. Price tends to be pinned or attracted to this level."
         else:
-            return f"BEARISH: Large Put Wall at {strikes[min_idx]}. Volatility often spikes if price drops below this level."
+            wall_strike = strikes[gex_values.index(min_gex)]
+            return f"BEARISH: Dominant Put Wall at ${wall_strike}. Breaking below this could accelerate selling."
+            
     except Exception as e:
-        return f"Neutral: Analysis error ({str(e)})"
+        return f"Analysis Error: {str(e)}"
 
 def rgb_to_hex(rgb_str):
     try:
@@ -68,35 +68,40 @@ def rgb_to_hex(rgb_str):
 
 def scrape_ticker(page, ticker):
     url = f"https://mztrading.netlify.app/options/analyze/{ticker}?dgextab=GEX&dte=30&showHeatmap=true"
-    print(f"[{ticker}] Starting scrape...")
     
-    # 1. GET PRICE FROM YAHOO FINANCE (Very Reliable)
+    # Get price from Yahoo Finance as the base
     price = get_live_price(ticker)
     
     try:
         page.goto(url, wait_until="networkidle", timeout=60000)
-        #page.wait_for_selector("table", timeout=30000)
+        
+        # CRITICAL: Wait for the table to actually have data rows (not just headers)
         page.wait_for_selector("table tr td", timeout=30000)
-        time.sleep(7)
+        
+        # Extra padding for the GEX engine to finish calculations
+        time.sleep(10) 
 
-        rows = page.query_selector_all("tr")
+        rows = page.query_selector_all("table tr")
         values_table, colors_table = [], []
 
         for row in rows:
             cells = row.query_selector_all("td, th")
-            v_row, c_row = [], []
-            for cell in cells:
-                v_row.append(cell.inner_text().strip())
-                bg = cell.evaluate("el => window.getComputedStyle(el).backgroundColor")
-                c_row.append(rgb_to_hex(bg))
-            if v_row:
+            if not cells: continue
+            
+            v_row = [c.inner_text().strip() for c in cells]
+            # Only process rows that look like data (avoiding empty spacers)
+            if len(v_row) > 1 and v_row[0] != "":
                 values_table.append(v_row)
+                
+                # Get colors for the heatmap
+                c_row = []
+                for cell in cells:
+                    bg = cell.evaluate("el => window.getComputedStyle(el).backgroundColor")
+                    c_row.append(rgb_to_hex(bg))
                 colors_table.append(c_row)
 
-        # 2. GENERATE TIMESTAMP & RECOMMENDATION
-        now_utc = datetime.datetime.now(datetime.timezone.utc)
-        now_est = now_utc - datetime.timedelta(hours=4) # EDT
-        timestamp = now_est.strftime("%I:%M %p")
+        # Generate Time and Recommendation
+        timestamp = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=4)).strftime("%I:%M %p")
         recommendation = generate_recommendation(values_table)
 
         # 3. SEND PAYLOAD
