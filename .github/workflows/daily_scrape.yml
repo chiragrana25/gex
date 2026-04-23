@@ -2,7 +2,7 @@ name: GEX to Google Sheets
 
 on:
   schedule:
-    - cron: '0,15,30,44 14-22 * * 1-5'
+    - cron: '*/15 14-22 * * 1-5'
     #- cron: '*/15 * * * *'
   workflow_dispatch: # Allows manual run
 
