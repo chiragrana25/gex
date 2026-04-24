@@ -33,47 +33,38 @@ def scrape_ticker(page, ticker):
     url = f"https://mztrading.netlify.app/options/analyze/{ticker}?dgextab=GEX&dte=30&showHeatmap=true"
     print(f"[{ticker}] Starting scrape...")
     
-    # Get price first so it's always defined
     price = get_live_price(ticker)
     
     try:
-        # Navigate and wait for content
         page.goto(url, wait_until="networkidle", timeout=60000)
         page.wait_for_selector("table", timeout=30000)
-        
-        # Give JS extra time to load the dynamic GEX numbers and heatmap
-        time.sleep(8)
+        time.sleep(10) 
 
-        rows = page.query_selector_all("tr")
+        # We target ALL rows in the main table body and header
+        rows = page.query_selector_all("table tr")
         values_table = []
         colors_table = []
 
         for row in rows:
+            # We look for both 'td' AND 'th' in every row to catch the Date/DTE column
             cells = row.query_selector_all("td, th")
             if not cells: continue
             
-            v_row = []
-            c_row = []
+            # Use a simple list comprehension to get EVERY column
+            v_row = [c.inner_text().strip() for c in cells]
             
-            for cell in cells:
-                # Get the text (This includes the Date if present in the first column)
-                v_row.append(cell.inner_text().strip())
-                
-                # Get the visual color
-                bg = cell.evaluate("el => window.getComputedStyle(el).backgroundColor")
-                c_row.append(rgb_to_hex(bg))
-            
-            # Only add rows that actually contain data
-            if v_row and v_row[0] != "":
+            # DEBUG: Uncomment the line below to see what Python sees in your GitHub logs
+            # print(f"Row data found: {v_row}")
+
+            if v_row:
                 values_table.append(v_row)
+                c_row = [rgb_to_hex(c.evaluate("el => window.getComputedStyle(el).backgroundColor")) for c in cells]
                 colors_table.append(c_row)
-                
-        # Get the current time in EST/EDT
+
         now_utc = datetime.datetime.now(datetime.timezone.utc)
-        now_est = now_utc - datetime.timedelta(hours=4) # Currently EDT
+        now_est = now_utc - datetime.timedelta(hours=4)
         timestamp = now_est.strftime("%I:%M %p")
         
-        # Prepare the data packet for Google Sheets
         payload = {
             "ticker": ticker,
             "values": values_table,
@@ -82,12 +73,11 @@ def scrape_ticker(page, ticker):
             "price": price
         }
 
-        # Send to Google Apps Script
         response = requests.post(SHEETS_BRIDGE_URL, json=payload, timeout=30)
-        print(f"[{ticker}] Status: {response.text} | Price: {price}")
+        print(f"[{ticker}] Status: {response.text}")
 
     except Exception as e:
-        print(f"[{ticker}] Error encountered: {e}")
+        print(f"[{ticker}] Error: {e}")
 
 def run_main():
     with sync_playwright() as p:
