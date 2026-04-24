@@ -2,57 +2,20 @@ import time
 import re
 import requests
 import datetime
-import yfinance as yf  # Reliable price source
+import yfinance as yf
 from playwright.sync_api import sync_playwright
 
 # --- CONFIGURATION ---
-SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycby1dyhSWKvi9wdZvNhxfQrTF8ifzTXd8GSHyqegpFk3RbGgb6ZM95F3-DCzzNJ7gBA6CA/exec"
-TICKERS = ["SPY", "QQQ", "MU","NVDA", "SNDK", "AAOI", "ALAB", "TSLA", "MSFT", "CRWV", "RDDT", "AMD", "PANW", "ASTS", "UNH"]
+SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbwArnpejrqFoyWd21uzgyWhcIT5aUOdVFXNR1VOQw1bsHNxePIx-AcMuok2GH_m045MbA/exec"
+TICKERS = ["NVDA", "SPY", "QQQ", "TSLA", "MU", "AAPL"]
 
 def get_live_price(ticker):
-    """Fetches the current price from Yahoo Finance as a backup."""
     try:
         stock = yf.Ticker(ticker)
-        # Get the latest price
         price = stock.fast_info['last_price']
         return f"{price:.2f}"
-    except Exception as e:
-        print(f"[{ticker}] YFinance Error: {e}")
+    except:
         return "N/A"
-
-def generate_recommendation(values_table):
-    try:
-        strikes, call_gex, put_gex = [], [], []
-        
-        # We assume: Col 0 = Strike, Col 1 = Call GEX, Col 2 = Put GEX
-        for row in values_table[1:]:
-            try:
-                s = float(re.sub(r'[^\d.]', '', row[0]))
-                c = float(re.sub(r'[^\d.-]', '', row[1]))
-                p = float(re.sub(r'[^\d.-]', '', row[2]))
-                
-                strikes.append(s)
-                call_gex.append(c)
-                put_gex.append(p)
-            except: continue
-
-        if not strikes: return "Insufficient data."
-
-        # Analysis for each column
-        max_call_val = max(call_gex)
-        call_wall = strikes[call_gex.index(max_call_val)]
-        
-        min_put_val = min(put_gex)
-        put_wall = strikes[put_gex.index(min_put_val)]
-
-        analysis = (
-            f"CALL WALL (Resistance): ${call_wall} | "
-            f"PUT WALL (Support): ${put_wall} | "
-            f"BIAS: {'Bullish' if abs(max_call_val) > abs(min_put_val) else 'Bearish'}"
-        )
-        return analysis
-    except Exception as e:
-        return f"Analysis Error: {str(e)}"
 
 def rgb_to_hex(rgb_str):
     try:
@@ -64,17 +27,11 @@ def rgb_to_hex(rgb_str):
 
 def scrape_ticker(page, ticker):
     url = f"https://mztrading.netlify.app/options/analyze/{ticker}?dgextab=GEX&dte=30&showHeatmap=true"
-    
-    # Get price from Yahoo Finance as the base
     price = get_live_price(ticker)
     
     try:
         page.goto(url, wait_until="networkidle", timeout=60000)
-        
-        # CRITICAL: Wait for the table to actually have data rows (not just headers)
         page.wait_for_selector("table tr td", timeout=30000)
-        
-        # Extra padding for the GEX engine to finish calculations
         time.sleep(10) 
 
         rows = page.query_selector_all("table tr")
@@ -83,36 +40,23 @@ def scrape_ticker(page, ticker):
         for row in rows:
             cells = row.query_selector_all("td, th")
             if not cells: continue
-            
             v_row = [c.inner_text().strip() for c in cells]
-            # Only process rows that look like data (avoiding empty spacers)
             if len(v_row) > 1 and v_row[0] != "":
                 values_table.append(v_row)
-                
-                # Get colors for the heatmap
-                c_row = []
-                for cell in cells:
-                    bg = cell.evaluate("el => window.getComputedStyle(el).backgroundColor")
-                    c_row.append(rgb_to_hex(bg))
+                c_row = [rgb_to_hex(c.evaluate("el => window.getComputedStyle(el).backgroundColor")) for c in cells]
                 colors_table.append(c_row)
 
-        # Generate Time and Recommendation
         timestamp = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=4)).strftime("%I:%M %p")
-        recommendation = generate_recommendation(values_table)
 
-        # 3. SEND PAYLOAD
         payload = {
             "ticker": ticker,
             "price": price,
             "values": values_table,
             "colors": colors_table,
-            "updated": timestamp,
-            "recommendation": recommendation
+            "updated": timestamp
         }
 
-        response = requests.post(SHEETS_BRIDGE_URL, json=payload, timeout=30)
-        print(f"[{ticker}] Status: {response.text} | Price: {price}")
-
+        requests.post(SHEETS_BRIDGE_URL, json=payload, timeout=30)
     except Exception as e:
         print(f"[{ticker}] Error: {e}")
 
