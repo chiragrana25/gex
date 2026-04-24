@@ -6,7 +6,7 @@ import yfinance as yf  # Added for reliable price
 from playwright.sync_api import sync_playwright
 
 # --- CONFIGURATION ---
-SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbxsenSWVoVOY0Am25p52mhBFOBO9N7fN9rJNadz_7X3j7JSAHLGsPOndKccq8SMfdmb4w/exec"
+SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbzS2BQwPB7Cx_-M9_tpNAjo_rbhD7Dbp0xt4OeEXftcXREl-hq7VHBn5yfT3sdxNHTHXg/exec"
 
 TICKERS = ["SPY", "QQQ", "MU","NVDA", "SNDK", "AAOI", "ALAB", "TSLA", "MSFT", "CRWV", "RDDT", "AMD", "PANW", "ASTS", "UNH"]
 
