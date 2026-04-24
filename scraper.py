@@ -6,7 +6,7 @@ import yfinance as yf
 from playwright.sync_api import sync_playwright
 
 # --- CONFIGURATION ---
-SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbwArnpejrqFoyWd21uzgyWhcIT5aUOdVFXNR1VOQw1bsHNxePIx-AcMuok2GH_m045MbA/exec"
+SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbwHHH2oB71Q70-ddp2Badrpz46pvV1Wh_tJEWFG7ugr2IApqgHgOP2z32MwIfUA3vp2/exec"
 TICKERS = ["NVDA", "SPY", "QQQ", "TSLA", "MU", "AAPL"]
 
 def get_live_price(ticker):
@@ -26,6 +26,7 @@ def rgb_to_hex(rgb_str):
     except: return "#FFFFFF"
 
 def scrape_ticker(page, ticker):
+    # Notice: we ensure the URL includes the GEX tab and 30 DTE
     url = f"https://mztrading.netlify.app/options/analyze/{ticker}?dgextab=GEX&dte=30&showHeatmap=true"
     price = get_live_price(ticker)
     
@@ -40,9 +41,15 @@ def scrape_ticker(page, ticker):
         for row in rows:
             cells = row.query_selector_all("td, th")
             if not cells: continue
+            
+            # This captures EVERY column (Date, Strike, Call GEX, Put GEX, etc.)
             v_row = [c.inner_text().strip() for c in cells]
+            
+            # Check if the row has data and is not just a spacer
             if len(v_row) > 1 and v_row[0] != "":
                 values_table.append(v_row)
+                
+                # Capture the heatmap colors
                 c_row = [rgb_to_hex(c.evaluate("el => window.getComputedStyle(el).backgroundColor")) for c in cells]
                 colors_table.append(c_row)
 
