@@ -55,32 +55,37 @@ def scrape_ticker(context, ticker):
                 c_row = [rgb_to_hex(c.evaluate("el => window.getComputedStyle(el).backgroundColor")) for c in cells]
                 colors_table.append(c_row)
 
-        # --- PHASE 2: SCREENSHOT (Secondary) ---
+# --- PHASE 2: SCREENSHOT (Brute Force Rendering) ---
         try:
             page.goto(chart_url, wait_until="load", timeout=30000)
             
-            # 1. Force the chart container to be large and visible
-            page.add_style_tag(content=".recharts-responsive-container { min-height: 450px !important; min-width: 800px !important; }")
+            # 1. FORCE DIMENSIONS & VISIBILITY
+            # We inject CSS to force the chart to exist and be visible
+            page.add_style_tag(content="""
+                .recharts-responsive-container { height: 500px !important; width: 800px !important; visibility: visible !important; opacity: 1 !important; }
+                .recharts-wrapper { visibility: visible !important; }
+            """)
+            
+            # 2. TRIGGER RENDER
             page.evaluate("window.dispatchEvent(new Event('resize'));")
             
-            # 2. PRECISION SELECTOR: Only look for the 'Rectangle' elements inside the GEX chart
-            # This avoids picking up the Material UI (Mui) icons
-            chart_bar_selector = ".recharts-rectangle, .recharts-bar-rectangles"
+            # 3. WAIT FOR THE WRAPPER (Instead of the bars)
+            # This is more reliable as the wrapper exists even if bars haven't animated yet
+            chart_wrapper = ".recharts-wrapper"
+            page.wait_for_selector(chart_wrapper, timeout=15000)
             
-            print(f"[{ticker}] Waiting for GEX bars to render...")
-            page.wait_for_selector(chart_bar_selector, state="visible", timeout=20000)
+            # Long settle time to allow data to populate the SVG
+            time.sleep(10) 
             
-            time.sleep(8) # Extra time for animation to settle
-            
-            # 3. CAPTURE THE WRAPPER
-            chart_element = page.locator(".recharts-wrapper").first
+            # 4. CAPTURE THE WHOLE AREA
+            chart_element = page.locator(chart_wrapper).first
             if chart_element:
                 img_bytes = chart_element.screenshot(type="jpeg", quality=50)
                 chart_base64 = base64.b64encode(img_bytes).decode('utf-8')
-                print(f"[{ticker}] Chart captured successfully.")
+                print(f"[{ticker}] Chart capture attempted.")
         except Exception as e:
             print(f"[{ticker}] Chart skipped: {e}")
-
+            
         # --- PHASE 3: SYNC ---
         now_est = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=4)
         payload = {
