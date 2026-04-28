@@ -34,50 +34,43 @@ def scrape_ticker(context, ticker):
     
     try:
         # --- 1. CAPTURE 7D CHART ---
-        page.goto(chart_url, wait_until="networkidle", timeout=60000)
-        time.sleep(15) 
-        chart_selector = ".recharts-wrapper, .recharts-surface"
-        try:
-            if page.locator(chart_selector).first.is_visible():
-                img_bytes = page.locator(chart_selector).first.screenshot(type="jpeg", quality=50)
-                chart_base64 = base64.b64encode(img_bytes).decode('utf-8')
-        except: pass
+        page.goto(chart_url, wait_until="load", timeout=60000)
+        # Wait for the chart container specifically
+        page.wait_for_selector(".recharts-responsive-container", timeout=20000)
+        time.sleep(10) 
+        chart_element = page.locator(".recharts-responsive-container").first
+        if chart_element:
+            chart_base64 = base64.b64encode(chart_element.screenshot(type="jpeg", quality=50)).decode('utf-8')
 
-        # --- 2. CAPTURE 30D DATA (FORCE DATE CAPTURE) ---
-        page.goto(data_url, wait_until="networkidle", timeout=60000)
+        # --- 2. CAPTURE 30D DATA ---
+        page.goto(data_url, wait_until="load", timeout=60000)
         
-        # Wait until the first row of the table has actual text in the first cell
-        # This is the "Fix" for missing dates
-        page.wait_for_function("""
-            () => {
-                const firstCell = document.querySelector('table tr td, table tr th');
-                return firstCell && firstCell.innerText.trim().length > 0;
-            }
-        """, timeout=30000)
+        # FIX: Instead of a complex function, wait for the text "Strike" to appear anywhere in the table
+        page.get_by_text("Strike").first.wait_for(state="visible", timeout=30000)
+        time.sleep(5) # Final settle time for dates to populate
 
-        rows = page.query_selector_all("table tr")
+        # Target all rows
+        rows = page.query_selector_all("tr")
         values_table, colors_table = [], []
 
         for row in rows:
-            # We explicitly grab 'th' and 'td'
-            cells = row.query_selector_all("th, td")
-            if not cells: continue
+            # Capture all cells (th or td)
+            cells = row.query_selector_all("td, th")
+            if not cells or len(cells) < 2: continue
             
-            # Extract text using a JS evaluate to ensure we get the "hidden" sticky text
-            v_row = [c.evaluate("el => el.innerText").strip() for c in cells]
+            # Deep extract text to catch "sticky" or "hidden" date columns
+            v_row = [c.evaluate("el => el.innerText || el.textContent").strip() for c in cells]
             
-            if v_row and any(v_row):
+            if v_row and v_row[1]: # Ensure at least the second column has data
                 values_table.append(v_row)
                 c_row = [rgb_to_hex(c.evaluate("el => window.getComputedStyle(el).backgroundColor")) for c in cells]
                 colors_table.append(c_row)
 
         # --- 3. SEND TO GOOGLE ---
         now_est = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=4)
-        sync_time = now_est.strftime("%I:%M %p")
-
         payload = {
             "ticker": ticker, "values": values_table, "colors": colors_table,
-            "updated": sync_time, "price": price, "chart_img": chart_base64
+            "updated": now_est.strftime("%I:%M %p"), "price": price, "chart_img": chart_base64
         }
         
         resp = requests.post(SHEETS_BRIDGE_URL, json=payload, timeout=60)
