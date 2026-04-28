@@ -35,41 +35,44 @@ def scrape_ticker(context, ticker):
     try:
         # --- PHASE 1: DATA SCRAPE (Priority) ---
         page.goto(data_url, wait_until="networkidle", timeout=60000)
-        # Wait for the table cells to actually have content (Fixes missing dates)
-        page.wait_for_selector("table th, table td", timeout=20000)
-        time.sleep(5) 
+        # Wait for any cell to have text (Strike or Date)
+        page.wait_for_selector("td, th", timeout=30000)
+        time.sleep(5)
 
         rows = page.query_selector_all("tr")
+        values_table, colors_table = [], []
+
         for row in rows:
+            # Look for all cell types
             cells = row.query_selector_all("td, th")
             if not cells: continue
-            v_row = [c.evaluate("el => el.innerText").strip() for c in cells]
+            
+            # USE textContent: It is more reliable than innerText for 'sticky' columns
+            v_row = [c.evaluate("el => el.textContent || el.innerText").strip() for c in cells]
+            
             if v_row and any(v_row):
                 values_table.append(v_row)
-                colors_table.append([rgb_to_hex(c.evaluate("el => window.getComputedStyle(el).backgroundColor")) for c in cells])
-        
-        print(f"[{ticker}] Data captured. Attempting chart...")
+                c_row = [rgb_to_hex(c.evaluate("el => window.getComputedStyle(el).backgroundColor")) for c in cells]
+                colors_table.append(c_row)
 
         # --- PHASE 2: SCREENSHOT (Secondary) ---
         try:
             page.goto(chart_url, wait_until="load", timeout=30000)
             
-            # 1. FORCE THE CONTAINER TO BE VISIBLE
-            # This injects CSS to ensure the chart isn't 0px tall
-            page.add_style_tag(content=".recharts-responsive-container { min-height: 400px !important; min-width: 600px !important; }")
-            
-            # 2. TRIGGER RESIZE EVENT
-            # This 'wakes up' the Recharts engine to draw the bars
+            # 1. Force the chart container to be large and visible
+            page.add_style_tag(content=".recharts-responsive-container { min-height: 450px !important; min-width: 800px !important; }")
             page.evaluate("window.dispatchEvent(new Event('resize'));")
             
-            # 3. WAIT FOR THE ACTUAL BARS (The 'path' or 'rect' elements)
-            # If the bars exist, they will be inside the .recharts-bar class
-            chart_bar_selector = ".recharts-bar, .recharts-rectangle, svg"
-            page.wait_for_selector(chart_bar_selector, state="visible", timeout=15000)
+            # 2. PRECISION SELECTOR: Only look for the 'Rectangle' elements inside the GEX chart
+            # This avoids picking up the Material UI (Mui) icons
+            chart_bar_selector = ".recharts-rectangle, .recharts-bar-rectangles"
             
-            time.sleep(5) # Let the animation finish
+            print(f"[{ticker}] Waiting for GEX bars to render...")
+            page.wait_for_selector(chart_bar_selector, state="visible", timeout=20000)
             
-            # 4. CAPTURE
+            time.sleep(8) # Extra time for animation to settle
+            
+            # 3. CAPTURE THE WRAPPER
             chart_element = page.locator(".recharts-wrapper").first
             if chart_element:
                 img_bytes = chart_element.screenshot(type="jpeg", quality=50)
