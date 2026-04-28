@@ -11,35 +11,22 @@ from playwright.sync_api import sync_playwright
 SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbwUW1uhn1ljLFJWoJX7bBS00pkwDubFuVPi8W9U0O3K4SX3Aee6576tAcXxyeGoEkMKIg/exec"
 TICKERS = ["SPX", "SPY", "QQQ", "MU","NVDA", "SNDK", "AAOI", "TSLA", "NBIS", "CRWV", "AMD", "PANW", "ASTS", "UNH"]
 
-Here is the fully simplified, high-speed version of your project. I have stripped out the wall/peak calculations, removed the screenshot logic, and strictly focused on delivering the full table (with the Date fix) and the heatmap colors.
-
-1. The Simplified Scraper (scraper.py)
-This version focuses purely on the data table and the heatmap.
-
-Python
-
-import time
-import datetime
-import re
-import requests
-import yfinance as yf
-from playwright.sync_api import sync_playwright
-
-# --- CONFIGURATION ---
-SHEETS_BRIDGE_URL = "YOUR_APPS_SCRIPT_URL_HERE"
-TICKERS = ["SPY", "^SPX", "QQQ", "MU", "NVDA", "SNDK", "AAOI", "ALAB", "TSLA", "MSFT", "CRWV", "RDDT", "AMD", "PANW", "ASTS", "UNH"]
-
 def get_live_price(ticker):
     try:
         stock = yf.Ticker(ticker)
-        return f"{stock.fast_info['last_price']:.2f}"
-    except: return "N/A"
+        price = stock.fast_info['last_price']
+        return f"{price:.2f}"
+    except:
+        return "N/A"
 
 def rgb_to_hex(rgb_str):
     try:
         nums = re.findall(r'\d+', rgb_str)
-        return '#{:02X}{:02X}{:02X}'.format(int(nums[0]), int(nums[1]), int(nums[2])) if len(nums) >= 3 else "#FFFFFF"
-    except: return "#FFFFFF"
+        if len(nums) >= 3:
+            return '#{:02X}{:02X}{:02X}'.format(int(nums[0]), int(nums[1]), int(nums[2]))
+        return "#FFFFFF"
+    except:
+        return "#FFFFFF"
 
 def scrape_ticker(context, ticker):
     url = f"https://mztrading.netlify.app/options/analyze/{ticker}?dgextab=GEX&dte=30&showHeatmap=true"
@@ -50,7 +37,7 @@ def scrape_ticker(context, ticker):
     try:
         page.goto(url, wait_until="networkidle", timeout=60000)
         
-        # DATE FIX: Wait until the first cell has text
+        # DATE FIX: Wait until the first cell has text before capturing
         page.wait_for_function("""
             () => {
                 const cell = document.querySelector('table th, table td');
@@ -67,7 +54,7 @@ def scrape_ticker(context, ticker):
             cells = row.query_selector_all("td, th")
             if not cells: continue
             
-            # Using evaluate to catch 'sticky' date columns
+            # Use evaluate to capture 'sticky' or dynamic date columns
             v_row = [c.evaluate("el => el.innerText").strip() for c in cells]
             
             if v_row and any(v_row):
