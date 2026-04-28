@@ -11,7 +11,7 @@ SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbxkVyQZ0D-oE91cOoi3
 DATA_URL = "https://mztrading.netlify.app/options/analyze/{ticker}?dgextab=GEX&dte=30&showHeatmap=true"
 # 7-Day (The Graphic URL you requested)
 CHART_URL = "https://mztrading.netlify.app/options/analyze/{ticker}?dgextab=GEX&expiry=7"
-TICKERS = ["SPX", "SPY", "QQQ", "MU","NVDA", "SNDK", "AAOI", "TSLA", "NBIS", "CRWV", "AMD", "PANW", "ASTS", "UNH"]
+TICKERS = ["^SPX", "SPY", "QQQ", "MU","NVDA", "SNDK", "AAOI", "TSLA", "NBIS", "CRWV", "AMD", "PANW", "ASTS", "UNH"]
 
 def get_live_price(ticker):
     """Fetches the current price from Yahoo Finance."""
