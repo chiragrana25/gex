@@ -2,6 +2,7 @@ import time
 import datetime
 import re
 import requests
+import base64
 import yfinance as yf  # Added for reliable price
 from playwright.sync_api import sync_playwright
 
