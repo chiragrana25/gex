@@ -25,50 +25,59 @@ def rgb_to_hex(rgb_str):
 
 def scrape_ticker(context, ticker):
     page = context.new_page()
-    # 7D for Chart, 30D for Heatmap Table
     chart_url = f"https://mztrading.netlify.app/options/analyze/{ticker}?dgextab=GEX&expiry=7"
     data_url = f"https://mztrading.netlify.app/options/analyze/{ticker}?dgextab=GEX&dte=30&showHeatmap=true"
     
-    print(f"[{ticker}] Scraping...")
+    print(f"[{ticker}] Processing...")
     price = get_live_price(ticker)
     chart_base64 = ""
     
     try:
         # --- 1. CAPTURE 7D CHART ---
         page.goto(chart_url, wait_until="networkidle", timeout=60000)
-        page.mouse.wheel(0, 400) # Nudge for lazy-loading
-        time.sleep(12) # Wait for Recharts animation
-        
+        time.sleep(15) 
         chart_selector = ".recharts-wrapper, .recharts-surface"
-        if page.locator(chart_selector).first.is_visible():
-            img_bytes = page.locator(chart_selector).first.screenshot(type="jpeg", quality=50)
-            chart_base64 = base64.b64encode(img_bytes).decode('utf-8')
+        try:
+            if page.locator(chart_selector).first.is_visible():
+                img_bytes = page.locator(chart_selector).first.screenshot(type="jpeg", quality=50)
+                chart_base64 = base64.b64encode(img_bytes).decode('utf-8')
+        except: pass
 
-        # --- 2. CAPTURE 30D DATA (WITH DATE FIX) ---
+        # --- 2. CAPTURE 30D DATA (FORCE DATE CAPTURE) ---
         page.goto(data_url, wait_until="networkidle", timeout=60000)
-        # CRITICAL: Wait for the 'th' (Header) to ensure the Date/DTE column is loaded
-        page.wait_for_selector("table thead th", timeout=30000)
-        time.sleep(5) 
+        
+        # Wait until the first row of the table has actual text in the first cell
+        # This is the "Fix" for missing dates
+        page.wait_for_function("""
+            () => {
+                const firstCell = document.querySelector('table tr td, table tr th');
+                return firstCell && firstCell.innerText.trim().length > 0;
+            }
+        """, timeout=30000)
 
         rows = page.query_selector_all("table tr")
         values_table, colors_table = [], []
+
         for row in rows:
-            # Capture BOTH th (Date/Headers) and td (Data)
-            cells = row.query_selector_all("td, th")
+            # We explicitly grab 'th' and 'td'
+            cells = row.query_selector_all("th, td")
             if not cells: continue
             
-            v_row = [c.inner_text().strip() for c in cells]
-            if v_row and v_row[0] != "":
+            # Extract text using a JS evaluate to ensure we get the "hidden" sticky text
+            v_row = [c.evaluate("el => el.innerText").strip() for c in cells]
+            
+            if v_row and any(v_row):
                 values_table.append(v_row)
-                # Hex logic for heatmap
                 c_row = [rgb_to_hex(c.evaluate("el => window.getComputedStyle(el).backgroundColor")) for c in cells]
                 colors_table.append(c_row)
 
         # --- 3. SEND TO GOOGLE ---
         now_est = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=4)
+        sync_time = now_est.strftime("%I:%M %p")
+
         payload = {
             "ticker": ticker, "values": values_table, "colors": colors_table,
-            "updated": now_est.strftime("%I:%M %p"), "price": price, "chart_img": chart_base64
+            "updated": sync_time, "price": price, "chart_img": chart_base64
         }
         
         resp = requests.post(SHEETS_BRIDGE_URL, json=payload, timeout=60)
