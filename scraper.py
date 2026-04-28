@@ -23,83 +23,44 @@ def rgb_to_hex(rgb_str):
     except: return "#FFFFFF"
 
 def scrape_ticker(context, ticker):
-    page = context.new_page()
+    # Standard 30D for the Heatmap Table
     data_url = f"https://mztrading.netlify.app/options/analyze/{ticker}?dgextab=GEX&dte=30&showHeatmap=true"
-    chart_url = f"https://mztrading.netlify.app/options/analyze/{ticker}?dgextab=GEX&expiry=7"
+    # 7D for the Chart Data
+    chart_data_url = f"https://mztrading.netlify.app/options/analyze/{ticker}?dgextab=GEX&expiry=7"
     
-    print(f"[{ticker}] Processing...")
+    page = context.new_page()
+    print(f"[{ticker}] Scraping...")
     price = get_live_price(ticker)
     
-    values_table, colors_table, chart_base64 = [], [], ""
-
     try:
-        # --- PHASE 1: DATA SCRAPE (Priority) ---
-        page.goto(data_url, wait_until="networkidle", timeout=60000)
-        # Wait for any cell to have text (Strike or Date)
-        page.wait_for_selector("td, th", timeout=30000)
-        time.sleep(5)
+        # 1. SCRAPE 30D TABLE DATA
+        page.goto(data_url, wait_until="networkidle")
+        page.wait_for_selector("table", timeout=30000)
+        time.sleep(3)
+        values_30d = page.evaluate("() => Array.from(document.querySelectorAll('tr')).map(row => Array.from(row.querySelectorAll('td, th')).map(c => c.textContent.trim()))")
+        colors_30d = [] # (Keep your existing color extraction logic here)
 
-        rows = page.query_selector_all("tr")
-        values_table, colors_table = [], []
+        # 2. SCRAPE 7D CHART DATA (The New Way)
+        page.goto(chart_data_url, wait_until="networkidle")
+        page.wait_for_selector("table", timeout=30000)
+        # We grab the 7D table data to build the chart in Sheets
+        values_7d = page.evaluate("() => Array.from(document.querySelectorAll('tr')).map(row => Array.from(row.querySelectorAll('td, th')).map(c => c.textContent.trim()))")
 
-        for row in rows:
-            # Look for all cell types
-            cells = row.query_selector_all("td, th")
-            if not cells: continue
-            
-            # USE textContent: It is more reliable than innerText for 'sticky' columns
-            v_row = [c.evaluate("el => el.textContent || el.innerText").strip() for c in cells]
-            
-            if v_row and any(v_row):
-                values_table.append(v_row)
-                c_row = [rgb_to_hex(c.evaluate("el => window.getComputedStyle(el).backgroundColor")) for c in cells]
-                colors_table.append(c_row)
-
-# --- PHASE 2: SCREENSHOT (Brute Force Rendering) ---
-        try:
-            page.goto(chart_url, wait_until="load", timeout=30000)
-            
-            # 1. FORCE DIMENSIONS & VISIBILITY
-            # We inject CSS to force the chart to exist and be visible
-            page.add_style_tag(content="""
-                .recharts-responsive-container { height: 500px !important; width: 800px !important; visibility: visible !important; opacity: 1 !important; }
-                .recharts-wrapper { visibility: visible !important; }
-            """)
-            
-            # 2. TRIGGER RENDER
-            page.evaluate("window.dispatchEvent(new Event('resize'));")
-            
-            # 3. WAIT FOR THE WRAPPER (Instead of the bars)
-            # This is more reliable as the wrapper exists even if bars haven't animated yet
-            chart_wrapper = ".recharts-wrapper"
-            page.wait_for_selector(chart_wrapper, timeout=15000)
-            
-            # Long settle time to allow data to populate the SVG
-            time.sleep(10) 
-            
-            # 4. CAPTURE THE WHOLE AREA
-            chart_element = page.locator(chart_wrapper).first
-            if chart_element:
-                img_bytes = chart_element.screenshot(type="jpeg", quality=50)
-                chart_base64 = base64.b64encode(img_bytes).decode('utf-8')
-                print(f"[{ticker}] Chart capture attempted.")
-        except Exception as e:
-            print(f"[{ticker}] Chart skipped: {e}")
-            
-        # --- PHASE 3: SYNC ---
-        now_est = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=4)
+        # 3. SYNC TO GOOGLE
         payload = {
-            "ticker": ticker, "values": values_table, "colors": colors_table,
-            "updated": now_est.strftime("%I:%M %p"), "price": price, "chart_img": chart_base64
+            "ticker": ticker,
+            "values": values_30d,
+            "chart_data": values_7d, # Sending raw data instead of an image
+            "updated": datetime.datetime.now().strftime("%I:%M %p"),
+            "price": price
         }
-        
-        resp = requests.post(SHEETS_BRIDGE_URL, json=payload, timeout=45)
-        print(f"[{ticker}] Sync: {resp.text}")
-
+        requests.post(SHEETS_BRIDGE_URL, json=payload, timeout=60)
+        print(f"[{ticker}] Data Sent.")
     except Exception as e:
-        print(f"[{ticker}] Global Failure: {e}")
+        print(f"[{ticker}] Error: {e}")
     finally:
         page.close()
+            
 
 def run_main():
     with sync_playwright() as p:
