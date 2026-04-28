@@ -52,15 +52,25 @@ def scrape_ticker(context, ticker):
 
         # --- PHASE 2: SCREENSHOT (Secondary) ---
         try:
-            page.goto(chart_url, wait_until="networkidle", timeout=30000)
-            page.mouse.wheel(0, 400)
-            # Wait for the chart container - if this fails, it won't kill the data sync
-            chart_selector = ".recharts-wrapper, .recharts-surface"
-            page.wait_for_selector(chart_selector, state="visible", timeout=15000)
-            time.sleep(5) 
-            chart_element = page.locator(chart_selector).first
-            if chart_element:
-                img_bytes = chart_element.screenshot(type="jpeg", quality=50)
+            page.goto(chart_url, wait_until="load", timeout=30000)
+            
+            # 1. Nudge the page to trigger JS rendering
+            page.set_viewport_size({"width": 1280, "height": 1000})
+            page.mouse.wheel(0, 500)
+            time.sleep(2)
+            page.mouse.wheel(0, -200)
+            
+            # 2. Wait for ANY SVG inside the chart area
+            chart_selector = "div.recharts-responsive-container svg, .recharts-surface"
+            page.wait_for_selector(chart_selector, state="attached", timeout=15000)
+            
+            # 3. Final wait for animation to settle
+            time.sleep(8) 
+            
+            # 4. Capture the container
+            container = page.locator(".recharts-responsive-container").first
+            if container:
+                img_bytes = container.screenshot(type="jpeg", quality=50)
                 chart_base64 = base64.b64encode(img_bytes).decode('utf-8')
         except Exception as e:
             print(f"[{ticker}] Chart skipped: {e}")
