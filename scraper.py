@@ -7,7 +7,7 @@ import yfinance as yf
 from playwright.sync_api import sync_playwright
 
 # --- CONFIGURATION ---
-SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbwxmUlmGCu4TaL1gZ7gibP5k6k3hgvI5uWJ1Dmin4oX3ZU24rPBpI8uXnVkhfMg2_iQyg/exec"
+SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbzKsaXCBGBqk9VVftz5TjLQyGksFMqC0-cqHx8Lw1Da2wdI0zZK6W3sP2b6my7_-wL5Xw/exec"
 TICKERS = ["SPY", "^SPX", "QQQ", "MU", "NVDA", "SNDK", "AAOI", "ALAB", "TSLA", "MSFT", "CRWV", "RDDT", "AMD", "PANW", "ASTS", "UNH"]
 
 def get_live_price(ticker):
