@@ -6,7 +6,7 @@ import yfinance as yf
 from playwright.sync_api import sync_playwright
 
 # --- CONFIGURATION ---
-SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbz6UkSdt9v8eVTdLI99O3lRKswFhG-pfWEabovc8x24jOoO6r9ry8Egx7SlfdSV11BYIw/exec"
+SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbxc9kkOzOMRN_tAjobze3wgBGW0iMnFBgj7lFSyPX0QlGA0GKqXCZbzFxYWMnPnJQT_MA/exec"
 #TICKERS = ["SPX", "SPY", "QQQ", "MU","NVDA", "SNDK", "AAOI", "TSLA", "NBIS", "CRWV", "AMD", "PANW", "ASTS", "UNH"]
 TICKERS = ["SPY"]
 
@@ -16,37 +16,44 @@ def get_live_price(ticker):
         return f"{stock.fast_info['last_price']:.2f}"
     except: return "N/A"
 
-def scrape_ticker(context, ticker):
+def scrape_ticker(browser, ticker):
     url = f"https://mztrading.netlify.app/options/analyze/{ticker}?dgextab=GEX&dte=30"
+    context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
     page = context.new_page()
-    print(f"[{ticker}] Waiting for data...")
     
+    print(f"[{ticker}] Intercepting network data...")
+    captured_json = []
+
+    # Listen for the background data packet
+    def on_response(response):
+        if "api" in response.url or "netlify.app" in response.url:
+            if response.status == 200 and "json" in response.headers.get("content-type", ""):
+                try:
+                    captured_json.append(response.json())
+                except: pass
+
+    page.on("response", on_response)
+
     try:
-        # 1. Load page
-        page.goto(url, wait_until="load", timeout=60000)
-        
-        # 2. BRUTE FORCE WAIT: Wait specifically for a cell containing a "$" or a number
-        # This prevents "API Error" caused by scraping an empty skeleton
-        page.wait_for_selector("td:has-text('0'), td:has-text('.'), th:has-text('Strike')", timeout=45000)
-        time.sleep(5) 
+        page.goto(url, wait_until="networkidle", timeout=60000)
+        time.sleep(5) # Give the background fetch a moment
 
-        # 3. DEEP EXTRACT
-        # We use a JS map to ensure we get every column, including the Date
-        data_payload = page.evaluate("""
-            () => {
+        # Fallback: If interception failed, we do a very simple table grab
+        if not captured_json:
+            print(f"[{ticker}] API not caught, using DOM fallback...")
+            values = page.evaluate("""() => {
                 const rows = Array.from(document.querySelectorAll('tr'));
-                return rows.map(row => 
-                    Array.from(row.querySelectorAll('td, th')).map(cell => cell.innerText.trim())
-                ).filter(r => r.length > 0 && r[0] !== "");
-            }
-        """)
+                return rows.map(row => Array.from(row.querySelectorAll('td, th')).map(c => c.innerText.trim())).filter(r => r.length > 0);
+            }""")
+        else:
+            # We take the largest JSON object found (usually the GEX table)
+            data = max(captured_json, key=len)
+            values = data if isinstance(data, list) else [["Data Error"]]
 
-        # 4. SYNC
-        now_est = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=4)
         payload = {
             "ticker": ticker,
-            "values": data_payload,
-            "updated": now_est.strftime("%I:%M %p"),
+            "values": values,
+            "updated": (datetime.datetime.now() - datetime.timedelta(hours=4)).strftime("%I:%M %p"),
             "price": get_live_price(ticker)
         }
         
@@ -56,17 +63,13 @@ def scrape_ticker(context, ticker):
     except Exception as e:
         print(f"[{ticker}] Failed: {e}")
     finally:
-        page.close()
+        context.close()
 
 def run_main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        # Use a very specific User Agent to avoid the 'API Error' block
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        )
         for ticker in TICKERS:
-            scrape_ticker(context, ticker)
+            scrape_ticker(browser, ticker)
         browser.close()
 
 if __name__ == "__main__":
