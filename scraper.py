@@ -54,24 +54,27 @@ def scrape_ticker(context, ticker):
         try:
             page.goto(chart_url, wait_until="load", timeout=30000)
             
-            # 1. Nudge the page to trigger JS rendering
-            page.set_viewport_size({"width": 1280, "height": 1000})
-            page.mouse.wheel(0, 500)
-            time.sleep(2)
-            page.mouse.wheel(0, -200)
+            # 1. FORCE THE CONTAINER TO BE VISIBLE
+            # This injects CSS to ensure the chart isn't 0px tall
+            page.add_style_tag(content=".recharts-responsive-container { min-height: 400px !important; min-width: 600px !important; }")
             
-            # 2. Wait for ANY SVG inside the chart area
-            chart_selector = "div.recharts-responsive-container svg, .recharts-surface"
-            page.wait_for_selector(chart_selector, state="attached", timeout=15000)
+            # 2. TRIGGER RESIZE EVENT
+            # This 'wakes up' the Recharts engine to draw the bars
+            page.evaluate("window.dispatchEvent(new Event('resize'));")
             
-            # 3. Final wait for animation to settle
-            time.sleep(8) 
+            # 3. WAIT FOR THE ACTUAL BARS (The 'path' or 'rect' elements)
+            # If the bars exist, they will be inside the .recharts-bar class
+            chart_bar_selector = ".recharts-bar, .recharts-rectangle, svg"
+            page.wait_for_selector(chart_bar_selector, state="visible", timeout=15000)
             
-            # 4. Capture the container
-            container = page.locator(".recharts-responsive-container").first
-            if container:
-                img_bytes = container.screenshot(type="jpeg", quality=50)
+            time.sleep(5) # Let the animation finish
+            
+            # 4. CAPTURE
+            chart_element = page.locator(".recharts-wrapper").first
+            if chart_element:
+                img_bytes = chart_element.screenshot(type="jpeg", quality=50)
                 chart_base64 = base64.b64encode(img_bytes).decode('utf-8')
+                print(f"[{ticker}] Chart captured successfully.")
         except Exception as e:
             print(f"[{ticker}] Chart skipped: {e}")
 
