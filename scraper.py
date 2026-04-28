@@ -6,8 +6,11 @@ import yfinance as yf  # Added for reliable price
 from playwright.sync_api import sync_playwright
 
 # --- CONFIGURATION ---
-SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbzS2BQwPB7Cx_-M9_tpNAjo_rbhD7Dbp0xt4OeEXftcXREl-hq7VHBn5yfT3sdxNHTHXg/exec"
-
+#SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbzS2BQwPB7Cx_-M9_tpNAjo_rbhD7Dbp0xt4OeEXftcXREl-hq7VHBn5yfT3sdxNHTHXg/exec"
+SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbxkVyQZ0D-oE91cOoi3iNPRvI4uJ2WGl9luW9GaJWChm3ocSOR222ifYh4-dZZhqT3ctw/exec"
+DATA_URL = "https://mztrading.netlify.app/options/analyze/{ticker}?dgextab=GEX&dte=30&showHeatmap=true"
+# 7-Day (The Graphic URL you requested)
+CHART_URL = "https://mztrading.netlify.app/options/analyze/{ticker}?dgextab=GEX&expiry=7"
 TICKERS = ["SPX", "SPY", "QQQ", "MU","NVDA", "SNDK", "AAOI", "TSLA", "NBIS", "CRWV", "AMD", "PANW", "ASTS", "UNH"]
 
 def get_live_price(ticker):
@@ -30,13 +33,19 @@ def rgb_to_hex(rgb_str):
         return "#FFFFFF"
 
 def scrape_ticker(page, ticker):
-    url = f"https://mztrading.netlify.app/options/analyze/{ticker}?dgextab=GEX&dte=30&showHeatmap=true"
+    #url = f"https://mztrading.netlify.app/options/analyze/{ticker}?dgextab=GEX&dte=30&showHeatmap=true"
     print(f"[{ticker}] Starting scrape...")
     
     price = get_live_price(ticker)
     
     try:
-        page.goto(url, wait_until="networkidle", timeout=60000)
+        page.goto(CHART_URL.format(ticker=ticker), wait_until="networkidle")
+        time.sleep(10)
+        chart_element = page.locator(".recharts-responsive-container, #gex-chart").first
+        chart_bytes = chart_element.screenshot()
+        chart_base64 = base64.b64encode(chart_bytes).decode('utf-8')
+    
+        page.goto(DATA_URL.format(ticker=ticker), wait_until="networkidle", timeout=60000)
         page.wait_for_selector("table", timeout=30000)
         time.sleep(10) 
 
@@ -70,6 +79,7 @@ def scrape_ticker(page, ticker):
             "values": values_table,
             "colors": colors_table,
             "updated": timestamp,
+            "chart_img": chart_base64,
             "price": price
         }
 
