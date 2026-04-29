@@ -8,7 +8,7 @@ from playwright.sync_api import sync_playwright
 
 # --- CONFIGURATION ---#
 #SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbzS2BQwPB7Cx_-M9_tpNAjo_rbhD7Dbp0xt4OeEXftcXREl-hq7VHBn5yfT3sdxNHTHXg/exec"
-SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbzZT1MszLLZDo6rtLgU5RJwDoUWxjbv4KD4zwbRl-9Aj-j5NPnxff21hzFpPHeHYKiEqg/exec"
+SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbylwDpKMCAOFp0pvmTlYCZeg7oxHjMQKNUMSXHwjhw5RPIyZroDBFStTxsLZJOpMuVL/exec"
 TICKERS = ["SPX", "SPY", "QQQ", "MU","NVDA", "SNDK", "AAOI", "TSLA", "NBIS", "CRWV", "AMD", "PANW", "ASTS", "UNH"]
 
 def get_live_price(ticker):
