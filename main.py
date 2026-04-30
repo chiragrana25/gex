@@ -35,7 +35,7 @@ def main():
             # 1. Precision Crop
             img = Image.open(full_path)
             # (left, top, right, bottom)
-            chart_img = img.crop((280, 60, 1550, 1900)) 
+            chart_img = img.crop((450, 180, 1850, 950)) 
             
             # 2. RESIZE TO FIT GOOGLE LIMITS (Max 1M Pixels)
             width, height = chart_img.size
