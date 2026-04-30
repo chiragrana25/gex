@@ -21,40 +21,47 @@ def setup_driver():
     return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
 def main():
-    if not WEBAPP_URL: return
+    if not WEBAPP_URL:
+        print("CRITICAL: WEBAPP_URL secret is missing!")
+        return
+
     driver = setup_driver()
     try:
         for ticker in TICKERS:
             print(f"Refreshing {ticker}...")
             driver.get(f"https://mztrading.netlify.app/options/analyze/{ticker}?expiry=7")
-            time.sleep(18) 
+            time.sleep(18) # Wait for rendering
             
             full_path = f"full_{ticker}.png"
             driver.save_screenshot(full_path)
             
             # 1. Precision Crop
-            img = Image.open(full_path)
+            # Reduced 'right' to 1400 to cut off excess space
             left, top, right, bottom = 280, 60, 1200, 1900
             
             img = Image.open(full_path)
             chart_img = img.crop((left, top, right, bottom))
             
-            # Resize logic stays to keep under 1M pixels
+            # 2. Resize logic for Google 1M pixel limit
             width, height = chart_img.size
             max_pixels = 950000
             if (width * height) > max_pixels:
                 scale_factor = (max_pixels / (width * height))**0.5
-                chart_img = chart_img.resize((int(width * scale_factor), int(height * scale_factor)), Image.LANCZOS)
+                new_size = (int(width * scale_factor), int(height * scale_factor))
+                chart_img = chart_img.resize(new_size, Image.LANCZOS)
+                print(f"Resized {ticker} for Google limits.")
 
             crop_path = f"{ticker}_final.png"
             chart_img.save(crop_path, optimize=True, quality=85)
 
-            # Send to Google (We'll still send the Base64 so it's ready for the button)
+            # 3. Base64 & Send
             with open(crop_path, "rb") as img_file:
                 b64_string = base64.b64encode(img_file.read()).decode('utf-8')
 
             payload = {"ticker": ticker, "imageData": b64_string}
-            requests.post(WEBAPP_URL, json=payload, timeout=40)
+            
+            # FIXED: Added 'res =' here to define the variable
+            res = requests.post(WEBAPP_URL, json=payload, timeout=40)
             print(f"Sent {ticker}: {res.text}")
                 
     finally:
