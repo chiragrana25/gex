@@ -6,12 +6,27 @@ WEBAPP_URL = os.environ.get('WEBAPP_URL')
 TICKERS = ['NVDA']
 
 def rgb_to_hex(rgb_str):
+    """Hardened conversion: Ignores transparency and handles empty values."""
     try:
+        # If it's transparent or empty, return pure white so the sheet stays clean
+        if not rgb_str or 'rgba(0, 0, 0, 0)' in rgb_str or 'transparent' in rgb_str:
+            return "#ffffff"
+        
+        # Extract numbers
         nums = re.findall(r'\d+', rgb_str)
         if len(nums) >= 3:
-            return '#{:02x}{:02x}{:02x}'.format(int(nums[0]), int(nums[1]), int(nums[2]))
+            r, g, b = int(nums[0]), int(nums[1]), int(nums[2])
+            
+            # ANTI-BLACK FILTER: If the color is literally (0,0,0) but the site 
+            # is light-themed, it's likely a rendering error. Default to white.
+            if r == 0 and g == 0 and b == 0:
+                return "#ffffff" 
+                
+            return '#{:02x}{:02x}{:02x}'.format(r, g, b)
         return "#ffffff"
-    except: return "#ffffff"
+    except:
+        return "#ffffff"
+
 
 def get_live_price(ticker):
     try:
@@ -50,7 +65,7 @@ def scrape_data(context, ticker):
             
             v_row = [c.evaluate("el => el.innerText").strip() for c in cells]
             # Capture heatmap background colors
-            c_row = [rgb_to_hex(c.evaluate("el => window.getComputedStyle(el).backgroundColor")) for c in cells]
+            c_row = [rgb_to_hex(c.evaluate("el => window.getComputedStyle(el).getPropertyValue('background-color')")) for c in cells]
             
             if v_row and any(v_row):
                 values_table.append(v_row)
