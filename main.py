@@ -34,29 +34,27 @@ def main():
             
             # 1. Precision Crop
             img = Image.open(full_path)
-            # (left, top, right, bottom)
-            chart_img = img.crop((450, 180, 1850, 950)) 
+            left, top, right, bottom = 280, 60, 1200, 1900
             
-            # 2. RESIZE TO FIT GOOGLE LIMITS (Max 1M Pixels)
+            img = Image.open(full_path)
+            chart_img = img.crop((left, top, right, bottom))
+            
+            # Resize logic stays to keep under 1M pixels
             width, height = chart_img.size
-            max_pixels = 950000 # Safety margin under 1M
-            current_pixels = width * height
-            
-            if current_pixels > max_pixels:
-                scale_factor = (max_pixels / current_pixels)**0.5
-                new_size = (int(width * scale_factor), int(height * scale_factor))
-                chart_img = chart_img.resize(new_size, Image.LANCZOS)
-                print(f"Resized {ticker} to {new_size[0]}x{new_size[1]}")
+            max_pixels = 950000
+            if (width * height) > max_pixels:
+                scale_factor = (max_pixels / (width * height))**0.5
+                chart_img = chart_img.resize((int(width * scale_factor), int(height * scale_factor)), Image.LANCZOS)
 
             crop_path = f"{ticker}_final.png"
             chart_img.save(crop_path, optimize=True, quality=85)
 
-            # 3. Base64 & Send
+            # Send to Google (We'll still send the Base64 so it's ready for the button)
             with open(crop_path, "rb") as img_file:
                 b64_string = base64.b64encode(img_file.read()).decode('utf-8')
 
             payload = {"ticker": ticker, "imageData": b64_string}
-            res = requests.post(WEBAPP_URL, json=payload, timeout=40)
+            requests.post(WEBAPP_URL, json=payload, timeout=40)
             print(f"Sent {ticker}: {res.text}")
                 
     finally:
