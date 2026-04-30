@@ -1,71 +1,49 @@
-import os
-import time
-import requests
-import base64
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
-from PIL import Image
+import os, datetime, re, requests, time
+import yfinance as yf
+from playwright.sync_api import sync_playwright
 
 WEBAPP_URL = os.environ.get('WEBAPP_URL')
 TICKERS = ['NVDA']
 
-def setup_driver():
-    options = Options()
-    options.add_argument('--headless=new')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('--window-size=1600,2200') 
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
-    return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-
-def main():
-    if not WEBAPP_URL:
-        print("CRITICAL: WEBAPP_URL secret is missing!")
-        return
-
-    driver = setup_driver()
+def rgb_to_hex(rgb_str):
     try:
-        for ticker in TICKERS:
-            print(f"Refreshing {ticker}...")
-            driver.get(f"https://mztrading.netlify.app/options/analyze/{ticker}?expiry=7")
-            time.sleep(18) # Wait for rendering
-            
-            full_path = f"full_{ticker}.png"
-            driver.save_screenshot(full_path)
-            
-            # 1. Precision Crop
-            # Reduced 'right' to 1400 to cut off excess space
-            left, top, right, bottom = 280, 60, 1200, 1900
-            
-            img = Image.open(full_path)
-            chart_img = img.crop((left, top, right, bottom))
-            
-            # 2. Resize logic for Google 1M pixel limit
-            width, height = chart_img.size
-            max_pixels = 950000
-            if (width * height) > max_pixels:
-                scale_factor = (max_pixels / (width * height))**0.5
-                new_size = (int(width * scale_factor), int(height * scale_factor))
-                chart_img = chart_img.resize(new_size, Image.LANCZOS)
-                print(f"Resized {ticker} for Google limits.")
+        nums = re.findall(r'\d+', rgb_str)
+        return '#{:02x}{:02x}{:02x}'.format(int(nums[0]), int(nums[1]), int(nums[2])) if len(nums) >= 3 else "#FFFFFF"
+    except: return "#FFFFFF"
 
-            crop_path = f"{ticker}_final.png"
-            chart_img.save(crop_path, optimize=True, quality=85)
+def scrape_data(context, ticker):
+    clean_ticker = ticker.replace('^', '')
+    url = f"https://mztrading.netlify.app/options/analyze/{clean_ticker}?dgextab=GEX&expiry=30&dte=30&showHeatmap=true"
+    page = context.new_page()
+    try:
+        page.goto(url, wait_until="networkidle", timeout=90000)
+        page.evaluate("window.scrollTo(0, 400)") # Wake up lazy loader
+        
+        # Hydration Lock
+        page.wait_for_function("() => document.querySelectorAll('td').length > 20 && /[0-9]/.test(document.querySelectorAll('td')[15].innerText)", timeout=90000)
+        
+        rows = page.query_selector_all("tr")
+        v_table, c_table = [], []
+        for row in rows:
+            cells = row.query_selector_all("td, th")
+            if not cells: continue
+            v_table.append([c.evaluate("el => el.innerText").strip() for c in cells])
+            c_table.append([rgb_to_hex(c.evaluate("el => window.getComputedStyle(el).backgroundColor")) for c in cells])
+        
+        price = yf.Ticker(ticker).fast_info.get('last_price', 'N/A')
+        payload = {
+            "type": "DATA_SYNC",
+            "ticker": clean_ticker, "values": v_table, "colors": c_table,
+            "price": f"{price:.2f}" if isinstance(price, float) else "N/A",
+            "gex_sync": (datetime.datetime.now() - datetime.timedelta(hours=4)).strftime("%I:%M %p")
+        }
+        requests.post(WEBAPP_URL, json=payload, timeout=60)
+        print(f"[{clean_ticker}] Data Synced.")
+    except Exception as e: print(f"[{clean_ticker}] Error: {e}")
+    finally: page.close()
 
-            # 3. Base64 & Send
-            with open(crop_path, "rb") as img_file:
-                b64_string = base64.b64encode(img_file.read()).decode('utf-8')
-
-            payload = {"ticker": ticker, "imageData": b64_string}
-            
-            # FIXED: Added 'res =' here to define the variable
-            res = requests.post(WEBAPP_URL, json=payload, timeout=40)
-            print(f"Sent {ticker}: {res.text}")
-                
-    finally:
-        driver.quit()
-
-if __name__ == "__main__":
-    main()
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    context = browser.new_context(viewport={'width': 1920, 'height': 1080})
+    for t in TICKERS: scrape_data(context, t)
+    browser.close()
