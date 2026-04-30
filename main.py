@@ -16,7 +16,7 @@ def setup_driver():
     options.add_argument('--headless=new')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('--window-size=1600,2200') # Extra height for long tables
+    options.add_argument('--window-size=1600,2200') 
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
     return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
@@ -27,19 +27,29 @@ def main():
         for ticker in TICKERS:
             print(f"Refreshing {ticker}...")
             driver.get(f"https://mztrading.netlify.app/options/analyze/{ticker}?expiry=7")
-            time.sleep(18) # Animation buffer
+            time.sleep(18) 
             
-            # 1. Capture Full Screen
             full_path = f"full_{ticker}.png"
             driver.save_screenshot(full_path)
             
-            # 2. Precision Crop
-            # Top=60: Captures Price/Sync | Bottom=1900: Captures Table
-            # Left=280: Removes sidebar junk
+            # 1. Precision Crop
             img = Image.open(full_path)
+            # (left, top, right, bottom)
             chart_img = img.crop((280, 60, 1550, 1900)) 
+            
+            # 2. RESIZE TO FIT GOOGLE LIMITS (Max 1M Pixels)
+            width, height = chart_img.size
+            max_pixels = 950000 # Safety margin under 1M
+            current_pixels = width * height
+            
+            if current_pixels > max_pixels:
+                scale_factor = (max_pixels / current_pixels)**0.5
+                new_size = (int(width * scale_factor), int(height * scale_factor))
+                chart_img = chart_img.resize(new_size, Image.LANCZOS)
+                print(f"Resized {ticker} to {new_size[0]}x{new_size[1]}")
+
             crop_path = f"{ticker}_final.png"
-            chart_img.save(crop_path)
+            chart_img.save(crop_path, optimize=True, quality=85)
 
             # 3. Base64 & Send
             with open(crop_path, "rb") as img_file:
