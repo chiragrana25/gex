@@ -1,90 +1,56 @@
+import os
 import time
-import datetime
-import re
 import requests
 import base64
-import yfinance as yf  # Added for reliable price
-from playwright.sync_api import sync_playwright
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+from PIL import Image
 
-# --- CONFIGURATION ---#
-#SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbzS2BQwPB7Cx_-M9_tpNAjo_rbhD7Dbp0xt4OeEXftcXREl-hq7VHBn5yfT3sdxNHTHXg/exec"
-SHEETS_BRIDGE_URL = "https://script.google.com/macros/s/AKfycbylwDpKMCAOFp0pvmTlYCZeg7oxHjMQKNUMSXHwjhw5RPIyZroDBFStTxsLZJOpMuVL/exec"
-TICKERS = ["SPX", "SPY", "QQQ", "MU","NVDA", "SNDK", "AAOI", "TSLA", "NBIS", "CRWV", "AMD", "PANW", "ASTS", "UNH"]
+WEBAPP_URL = os.environ.get('WEBAPP_URL')
+TICKERS = ['NVDA', 'TSLA', 'AAPL', 'AMD']
 
-def get_live_price(ticker):
+def setup_driver():
+    options = Options()
+    options.add_argument('--headless=new')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--window-size=1600,2200') # Extra height for long tables
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+    return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+
+def main():
+    if not WEBAPP_URL: return
+    driver = setup_driver()
     try:
-        stock = yf.Ticker(ticker)
-        return f"{stock.fast_info['last_price']:.2f}"
-    except:
-        return "N/A"
-
-def rgb_to_hex(rgb_str):
-    try:
-        nums = re.findall(r'\d+', rgb_str)
-        if len(nums) >= 3:
-            return '#{:02X}{:02X}{:02X}'.format(int(nums[0]), int(nums[1]), int(nums[2]))
-        return "#FFFFFF"
-    except:
-        return "#FFFFFF"
-
-def scrape_ticker(context, ticker):
-    url = f"https://mztrading.netlify.app/options/analyze/{ticker}?dgextab=GEX&dte=30&showHeatmap=true"
-    page = context.new_page()
-    print(f"[{ticker}] Scraping...")
-    
-    price = get_live_price(ticker)
-    
-    try:
-        # Navigate and wait for the network to go quiet (data loaded)
-        page.goto(url, wait_until="networkidle", timeout=60000)
-        
-        # Give the JS 5 seconds to fill the table cells
-        time.sleep(5) 
-
-        rows = page.query_selector_all("tr")
-        values_table, colors_table = [], []
-
-        for row in rows:
-            # Capture both headers (th) and data (td) to ensure Dates are included
-            cells = row.query_selector_all("td, th")
-            if not cells: continue
-            
-            # Using evaluate(innerText) is the key to catching 'sticky' columns like Dates
-            v_row = [c.evaluate("el => el.innerText").strip() for c in cells]
-            
-            if v_row and any(v_row):
-                values_table.append(v_row)
-                c_row = [rgb_to_hex(c.evaluate("el => window.getComputedStyle(el).backgroundColor")) for c in cells]
-                colors_table.append(c_row)
-
-        now_est = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=4)
-        payload = {
-            "ticker": ticker, 
-            "values": values_table, 
-            "colors": colors_table,
-            "updated": now_est.strftime("%I:%M %p"), 
-            "price": price
-        }
-        
-        resp = requests.post(SHEETS_BRIDGE_URL, json=payload, timeout=30)
-        print(f"[{ticker}] Sync: {resp.text}")
-
-    except Exception as e:
-        print(f"[{ticker}] Error: {e}")
-    finally:
-        page.close()
-
-def run_main():
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        # Standard desktop user agent
-        context = browser.new_context(
-            viewport={'width': 1280, 'height': 800},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        )
         for ticker in TICKERS:
-            scrape_ticker(context, ticker)
-        browser.close()
+            print(f"Refreshing {ticker}...")
+            driver.get(f"https://mztrading.netlify.app/options/analyze/{ticker}?expiry=7")
+            time.sleep(18) # Animation buffer
+            
+            # 1. Capture Full Screen
+            full_path = f"full_{ticker}.png"
+            driver.save_screenshot(full_path)
+            
+            # 2. Precision Crop
+            # Top=60: Captures Price/Sync | Bottom=1900: Captures Table
+            # Left=280: Removes sidebar junk
+            img = Image.open(full_path)
+            chart_img = img.crop((280, 60, 1550, 1900)) 
+            crop_path = f"{ticker}_final.png"
+            chart_img.save(crop_path)
+
+            # 3. Base64 & Send
+            with open(crop_path, "rb") as img_file:
+                b64_string = base64.b64encode(img_file.read()).decode('utf-8')
+
+            payload = {"ticker": ticker, "imageData": b64_string}
+            res = requests.post(WEBAPP_URL, json=payload, timeout=40)
+            print(f"Sent {ticker}: {res.text}")
+                
+    finally:
+        driver.quit()
 
 if __name__ == "__main__":
-    run_main()
+    main()
