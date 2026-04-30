@@ -73,9 +73,19 @@ def scrape_data(context, ticker):
         page.close()
 
 def main():
-    if not WEBAPP_URL: return print("Error: WEBAPP_URL Secret missing.")
+    if not WEBAPP_URL: 
+        return print("Error: WEBAPP_URL Secret missing.")
+    
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(viewport={'width': 1920, 'height': 1080})
+        
         for ticker in TICKERS:
-            scrape_data(context,
+            # FIX: Ensure the parenthesis is closed here
+            scrape_data(context, ticker) 
+            time.sleep(1) 
+            
+        browser.close()
+
+if __name__ == "__main__":
+    main()
