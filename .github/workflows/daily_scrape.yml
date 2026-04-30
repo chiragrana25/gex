@@ -1,38 +1,29 @@
-name: GEX Dashboard & AI Analysis
+name: GEX Data Sync
 
 on:
   schedule:
-    # Runs every 15 minutes
-    - cron: '*/15 * * * *'
-  workflow_dispatch: # Allows you to trigger it manually from the "Actions" tab
+    - cron: '0 * * * *' # Runs every hour. Adjust as needed.
+  workflow_dispatch:
 
 jobs:
-  refresh-dashboard:
+  build:
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Checkout Repository
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          cache: 'pip' # Speeds up subsequent runs
 
-      - name: Install Chrome and Dependencies
+      - name: Install Dependencies
         run: |
-          pip install selenium requests webdriver-manager Pillow
+          python -m pip install --upgrade pip
+          pip install playwright requests yfinance
+          playwright install chromium
 
-      - name: Run GEX Scraper
+      - name: Run Data Scraper
         env:
-          # Make sure this matches the Secret name in your GitHub Repo settings
           WEBAPP_URL: ${{ secrets.WEBAPP_URL }}
         run: python main.py
-
-      - name: Upload Full Page Artifacts
-        if: failure() # Only uploads if the script crashes, to help you debug
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug-screenshots
-          path: full_*.png
