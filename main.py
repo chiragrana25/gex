@@ -9,7 +9,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from PIL import Image
 
 WEBAPP_URL = os.environ.get('WEBAPP_URL')
-TICKERS = ['NVDA', 'TSLA', 'AAPL', 'AMD']
+TICKERS = ['NVDA']
 
 def setup_driver():
     options = Options()
