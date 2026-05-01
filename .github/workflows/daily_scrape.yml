@@ -2,7 +2,8 @@ name: GEX Data Sync
 
 on:
   schedule:
-    - cron: '0 * * * *' # Runs every hour. Adjust as needed.
+    - cron: '*/15 8-20 * * 1-5'
+      timezone: "America/New_York" # Runs every hour. Adjust as needed.
   workflow_dispatch:
 
 jobs:
