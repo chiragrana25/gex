@@ -3,7 +3,7 @@ import yfinance as yf
 from playwright.sync_api import sync_playwright
 
 WEBAPP_URL = os.environ.get('WEBAPP_URL')
-TICKERS = ['SPX','NVDA', 'SPY', 'QQQ', 'MU', 'SNDK','TSLA', 'AAPL', 'AMD', 'CRWV', 'NBIS', 'MSFT', 'UNH', 'AAOI', 'ASTS', 'RDDT', 'ALAB', 'PANW', 'UNH']
+TICKERS = ['SPX','NVDA', 'SPY', 'QQQ', 'MU', 'SNDK','TSLA', 'AAPL', 'AMD', 'CRWV', 'NBIS', 'MSFT', 'QCOM', 'AAOI', 'ASTS', 'RDDT', 'ALAB', 'PANW', 'UNH']
 
 def rgb_to_hex(rgb_str):
     """Hardened conversion: Ignores transparency and handles empty values."""
