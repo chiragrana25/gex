@@ -112,7 +112,7 @@ def scrape_data(context, ticker, attempt=1):
             "values": values_table,
             "colors": colors_table,
             "price": get_live_price(ticker),
-            "gex_sync": (datetime.datetime.now() - datetime.timedelta(hours=4)).strftime("%I:%M %p"),
+            "gex_sync": (datetime.datetime.now() - datetime.timedelta(hours=4)).strftime("%m/%d/%Y %I:%M %p"),
         }
 
         requests.post(WEBAPP_URL, json=payload, timeout=60)
