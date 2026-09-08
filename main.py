@@ -10,6 +10,13 @@ TICKERS = ['SPX', 'SPY', 'QQQ', 'IWM', 'NVDA', 'MU', 'SNDK', 'WDC', 'AAPL', 'AMD
 # Tickers with large/complex options chains that reliably need more time.
 HEAVY_TICKERS = {'SPX', 'NVDA', 'AAPL', 'AMD', 'MSFT', 'TSLA', 'AMZN', 'ORCL', 'ANET', 'ALAB', 'NBIS', 'GOOG'}
 
+# yfinance/Yahoo Finance doesn't recognize some index tickers under their
+# plain name (e.g. 'SPX' returns "possibly delisted"). Map those to the
+# symbol Yahoo actually uses for live price lookups.
+YFINANCE_SYMBOL_MAP = {
+    'SPX': '^GSPC',
+}
+
 MAX_ATTEMPTS = 3
 BASE_TIMEOUT_MS = 90000     # for "normal" tickers
 HEAVY_TIMEOUT_MS = 150000   # for known heavy chains
@@ -33,7 +40,8 @@ def rgb_to_hex(rgb_str):
 
 def get_live_price(ticker):
     try:
-        t = yf.Ticker(ticker)
+        yf_symbol = YFINANCE_SYMBOL_MAP.get(ticker, ticker)
+        t = yf.Ticker(yf_symbol)
         price = t.fast_info.get('last_price') or t.fast_info.get('lastPrice')
         return f"{price:.2f}" if price else "N/A"
     except Exception:
@@ -54,19 +62,29 @@ def wait_for_table_ready(page, timeout_ms):
     page.wait_for_function(
         """() => {
             const rows = document.querySelectorAll('tr');
-            if (rows.length < 2) return false;
-
-            const lastRow = rows[rows.length - 1];
-            const cells = lastRow.querySelectorAll('td, th');
-            if (cells.length === 0) return false;
-
-            let numericCount = 0;
-            cells.forEach(c => {
-                if (/[0-9]/.test(c.innerText)) numericCount++;
-            });
+            if (rows.length < 3) return false;
 
             const totalCells = document.querySelectorAll('td').length;
-            return totalCells > 20 && numericCount >= Math.ceil(cells.length / 2);
+            if (totalCells <= 20) return false;
+
+            // Some tickers' tables end with a non-data footer/disclaimer row,
+            // so checking only the literal last row can never pass for them.
+            // Instead, check the last few rows and accept if ANY of them
+            // looks like a populated data row (majority-numeric cells).
+            for (let i = 1; i <= 3; i++) {
+                const row = rows[rows.length - i];
+                if (!row) continue;
+                const cells = row.querySelectorAll('td, th');
+                if (cells.length === 0) continue;
+
+                let numericCount = 0;
+                cells.forEach(c => {
+                    if (/[0-9]/.test(c.innerText)) numericCount++;
+                });
+
+                if (numericCount >= Math.ceil(cells.length / 2)) return true;
+            }
+            return false;
         }""",
         timeout=timeout_ms,
     )
